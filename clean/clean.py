@@ -118,11 +118,7 @@ def process_group(group_df: pd.DataFrame, sign_mapping: Dict[str, str]) -> pd.Da
     print(f"Processing ID: {group_df['id'].iloc[0]}, Frames: {len(group_df)}")
     
     group_clean = remove_high_missing_hand_data(group_df, sign_mapping)
-    
-    group_clean = process_nose_shoulder_interpolation(group_clean)
-    
-    group_clean = group_clean.fillna(0)
-    
+
     return group_clean
 
 def process_data(input_file: str, sord_file: str, low_memory: bool = False) -> pd.DataFrame:
