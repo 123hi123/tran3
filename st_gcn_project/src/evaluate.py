@@ -72,8 +72,13 @@ class Evaluator:
             class_names = [f"Class_{i}" for i in range(len(np.unique(all_targets)))]
         
         print(f"\nClassification Report:")
-        print(classification_report(all_targets, all_predictions, 
-                                  target_names=class_names, digits=4))
+        print(classification_report(
+            all_targets,
+            all_predictions,
+            target_names=class_names,
+            digits=4,
+            zero_division=0
+        ))
         
         # Confusion matrix analysis
         cm = confusion_matrix(all_targets, all_predictions)
@@ -117,7 +122,7 @@ class Evaluator:
                 confused_back, count_back = most_confused[confused_with]
                 if confused_back == i and i < confused_with:  # Avoid duplicates
                     mutual_pairs.append((i, confused_with, count_i, count_back))
-                    print(f"{class_names[i]} ↔ {class_names[confused_with]} "
+                    print(f"{class_names[i]} <-> {class_names[confused_with]} "
                           f"({count_i} and {count_back} confusions)")
         
         if not mutual_pairs:
