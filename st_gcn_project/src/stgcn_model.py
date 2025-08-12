@@ -231,8 +231,9 @@ class STGCN(nn.Module):
         mask = self.apply_temporal_dropout(x, mask, self.training)
         
         # Apply ST-GCN blocks
+        # 為避免過度抑制訊號，訓練階段不將 mask 作用於每個區塊，改僅在池化階段使用
         for st_gcn in self.st_gcn_networks:
-            x = st_gcn(x, self.A, mask)
+            x = st_gcn(x, self.A, None)
         
         # Weighted pooling
         x = self.pooling(x, mask)

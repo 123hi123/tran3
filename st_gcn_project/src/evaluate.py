@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from torch.cuda.amp import autocast
+from torch import amp
 import numpy as np
 import os
 import pickle
@@ -42,7 +42,7 @@ class Evaluator:
                 
                 # 使用混合精度推理加速
                 if self.use_amp:
-                    with autocast():
+                    with amp.autocast('cuda' if self.device.type == 'cuda' else 'cpu'):
                         output = self.model(data)
                 else:
                     output = self.model(data)
@@ -169,7 +169,7 @@ class Evaluator:
         self.plot_confusion_matrix(cm, class_names)
         
         # Save detailed report
-        with open("results/evaluation_report.txt", 'w') as f:
+        with open("results/evaluation_report.txt", 'w', encoding='utf-8') as f:
             f.write("ST-GCN Model Evaluation Report\n")
             f.write("=" * 50 + "\n\n")
             
@@ -202,7 +202,7 @@ class Evaluator:
             f.write(f"\nMutual Confusion Pairs:\n")
             f.write("-" * 25 + "\n")
             for i, j, count_i, count_j in mutual_pairs:
-                f.write(f"{class_names[i]} ↔ {class_names[j]} ({count_i} and {count_j} confusions)\n")
+                f.write(f"{class_names[i]} <-> {class_names[j]} ({count_i} and {count_j} confusions)\n")
         
         print(f"Evaluation results saved to: results/")
 
