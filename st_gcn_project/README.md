@@ -13,50 +13,22 @@
 - CUDA 11.8 支援
 - Conda 環境管理器
 
-## 環境安裝
+## 環境需求
 
-### 1. 創建 Conda 環境
+### 前置條件
+- 已建立 `sign_language` conda 環境
+- 已安裝 PyTorch (CUDA 11.8)、numpy、pandas、scikit-learn、matplotlib、seaborn、opencv-python、mediapipe
+
+### 安裝專案需要的額外套件
 ```bash
-# 創建虛擬環境 - 推薦使用最新穩定版本
-conda create -n sign_language python=3.11
-# 或者使用最新版本 (更佳性能)
-# conda create -n sign_language python=3.12
-
 # 啟動環境
 conda activate sign_language
-```
 
-### 2. 安裝深度學習框架
-```bash
-# 安裝 PyTorch (CUDA 11.8 版本，適配 RTX A2000)
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
-```
-
-### 3. 安裝必要套件
-```bash
-# 基本數據處理和視覺化
-pip install numpy pandas scikit-learn matplotlib seaborn
-
-# 電腦視覺和影像處理
-pip install opencv-python pillow
-
-# 手部檢測套件 (如需要)
-pip install mediapipe
-
-# 進度條和其他工具
+# 安裝進度條工具
 pip install tqdm
-```
 
-### 4. 安裝額外套件 (可選)
-```bash
-# Jupyter 開發環境
-pip install jupyter notebook ipykernel
-
-# 模型視覺化
-pip install tensorboard
-
-# 更快的數據載入
-pip install h5py
+# 可選：開發工具
+pip install jupyter notebook ipykernel tensorboard h5py
 ```
 
 ## 專案結構
