@@ -3,6 +3,13 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 from torch import amp
+import importlib.util
+try:
+    import torch._dynamo as dynamo
+    # 若後端（如 Triton/Inductor）不可用時，自動回退至 eager，避免整個訓練失敗
+    dynamo.config.suppress_errors = True
+except Exception:
+    dynamo = None
 import numpy as np
 import os
 import pickle
@@ -361,14 +368,19 @@ def main():
     
     model = model.to(device)
     
-    # 優化模型記憶體使用
-    if torch.cuda.is_available():
-        # 預編譯模型以獲得更好性能 (RTX A2000 支援)
+    # 優化模型記憶體使用：只有在 Triton 可用時才嘗試 torch.compile，否則跳過
+    def _triton_available():
+        return importlib.util.find_spec('triton') is not None
+
+    if torch.cuda.is_available() and _triton_available():
         try:
             model = torch.compile(model, mode='reduce-overhead')
             print("Model compiled with torch.compile for better performance")
-        except:
-            print("torch.compile not available, using standard model")
+        except Exception as ex:
+            print(f"torch.compile failed, fallback to eager. Reason: {ex}")
+    else:
+        if torch.cuda.is_available():
+            print("Triton not found or unsupported; skipping torch.compile and using eager mode.")
     
     # Create trainer and start training
     trainer = Trainer(model, device, save_dir="models")

@@ -7,6 +7,29 @@ This script ensures all components work together with correct paths
 import os
 import sys
 import subprocess
+from datetime import datetime
+
+
+def write_fail_file(step_name, command, stdout_text, stderr_text, filename="fail.txt"):
+    """Write a fail report file with useful debugging information."""
+    try:
+        lines = []
+        lines.append(f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        lines.append(f"Step: {step_name}")
+        lines.append(f"Command: {command}")
+        lines.append("")
+        lines.append("=== STDOUT ===")
+        lines.append(stdout_text or "<empty>")
+        lines.append("")
+        lines.append("=== STDERR ===")
+        lines.append(stderr_text or "<empty>")
+        lines.append("")
+        content = "\n".join(lines)
+        with open(filename, "w", encoding="utf-8") as f:
+            f.write(content)
+        print(f"❌ Failure report written to {os.path.abspath(filename)}")
+    except Exception as ex:
+        print(f"⚠️ Failed to write fail.txt: {ex}")
 
 def run_command(command, description):
     """Run a command and handle errors"""
@@ -25,6 +48,8 @@ def run_command(command, description):
         print(f"ERROR: {e}")
         print(f"STDOUT: {e.stdout}")
         print(f"STDERR: {e.stderr}")
+        # Write a failure report for debugging
+        write_fail_file(description, command, e.stdout, e.stderr)
         return False
 
 def check_data_files():
