@@ -19,7 +19,8 @@ class SkeletonDataProcessor:
         
     def load_csv_data(self, csv_path):
         """Load skeleton data from CSV file"""
-        df = pd.read_csv(csv_path)
+        # 避免 DtypeWarning，並減少記憶體峰值
+        df = pd.read_csv(csv_path, low_memory=False)
         return df
     
     def extract_skeleton_coordinates(self, df):
@@ -43,7 +44,8 @@ class SkeletonDataProcessor:
     
     def create_mask_from_nan(self, data):
         """Create binary mask from NaN values: 1 for valid data, 0 for NaN"""
-        mask = ~np.isnan(data)
+        # 同時將數值為 0 視為缺失，避免將 0 當作有效數據參與之後的正規化
+        mask = (~np.isnan(data)) & (data != 0)
         return mask.astype(np.float32)
     
     def apply_mask_to_coordinates(self, data, mask):
@@ -84,21 +86,45 @@ class SkeletonDataProcessor:
         
         return skeleton_data, joint_names
     
+    def _compute_feature_stats_ignore_zeros(self, data):
+        """計算每個關節坐標維度 (x,y,z) 的平均與標準差，忽略 0（視為缺失）。
+        參數:
+            data: ndarray, 形狀 [N, V, 3]
+        回傳:
+            means, stds: 形狀 [V, 3]
+        """
+        mask = (data != 0)
+        valid_counts = mask.sum(axis=0)  # [V, 3]
+        valid_counts = np.maximum(valid_counts, 1)  # 避免除以 0
+        sums = (data * mask).sum(axis=0)
+        means = sums / valid_counts
+        var = (((data - means) * mask) ** 2).sum(axis=0) / valid_counts
+        stds = np.sqrt(var)
+        stds = np.where(stds < 1e-6, 1.0, stds)  # 避免除以 0 或過小
+        return means, stds
+
     def normalize_coordinates(self, skeleton_data):
-        """Center and scale the coordinates"""
-        original_shape = skeleton_data.shape
-        # Reshape to [samples, features] for scaling
-        data_reshaped = skeleton_data.reshape(original_shape[0], -1)
-        
-        # Remove samples that are all zeros (masked out completely)
-        valid_samples = np.any(data_reshaped != 0, axis=1)
-        
-        if np.any(valid_samples):
-            data_normalized = data_reshaped.copy()
-            data_normalized[valid_samples] = self.scaler.fit_transform(data_reshaped[valid_samples])
-            return data_normalized.reshape(original_shape)
-        else:
-            return skeleton_data
+        """以忽略 0 的方式做 z-score 正規化，只對非 0 值標準化，0 值維持為 0。
+        回傳 (normalized, means, stds)
+        """
+        data = skeleton_data.copy()
+        means, stds = self._compute_feature_stats_ignore_zeros(data)
+        mask = (data != 0)
+        data = data - means  # broadcast [N,V,3]
+        data[~mask] = 0
+        data = data / stds
+        data[~mask] = 0
+        return data, means, stds
+
+    def normalize_with_stats(self, skeleton_data, means, stds):
+        """使用給定的均值/標準差進行正規化（忽略 0）。"""
+        data = skeleton_data.copy()
+        mask = (data != 0)
+        data = data - means
+        data[~mask] = 0
+        data = data / stds
+        data[~mask] = 0
+        return data
     
     def temporal_alignment(self, data, labels, video_ids=None):
         """Align temporal sequences to fixed length T=20 with specific windowing rules"""
@@ -217,8 +243,8 @@ class SkeletonDataProcessor:
         # Reshape to skeleton format
         train_skeleton, joint_names = self.reshape_to_skeleton_format(train_coords_masked, coord_columns)
         
-        # Normalize
-        train_skeleton_norm = self.normalize_coordinates(train_skeleton)
+        # Normalize（忽略 0，並回傳統計量以供驗證集使用）
+        train_skeleton_norm, feat_means, feat_stds = self.normalize_coordinates(train_skeleton)
         
         # Temporal alignment
         train_aligned, train_labels_aligned = self.temporal_alignment(train_skeleton_norm, train_labels, train_video_ids)
@@ -232,14 +258,8 @@ class SkeletonDataProcessor:
         val_coords_masked = self.apply_mask_to_coordinates(val_coords, val_mask)
         val_skeleton, _ = self.reshape_to_skeleton_format(val_coords_masked, coord_columns)
         
-        # Apply same normalization
-        original_shape = val_skeleton.shape
-        val_reshaped = val_skeleton.reshape(original_shape[0], -1)
-        val_normalized = val_reshaped.copy()
-        valid_samples = np.any(val_reshaped != 0, axis=1)
-        if np.any(valid_samples):
-            val_normalized[valid_samples] = self.scaler.transform(val_reshaped[valid_samples])
-        val_skeleton_norm = val_normalized.reshape(original_shape)
+        # Apply same normalization（使用訓練集統計量，忽略 0）
+        val_skeleton_norm = self.normalize_with_stats(val_skeleton, feat_means, feat_stds)
         
         val_aligned, val_labels_aligned = self.temporal_alignment(val_skeleton_norm, val_labels, val_video_ids)
         X_val = self.convert_to_stgcn_format(val_aligned)
@@ -269,6 +289,8 @@ class SkeletonDataProcessor:
             'class_names': self.label_encoder.classes_.tolist(),
             'input_shape': X_train.shape[1:],  # [C, T, V, M]
             'scaler': self.scaler,
+            'norm_means': feat_means,
+            'norm_stds': feat_stds,
             'label_encoder': self.label_encoder
         }
         

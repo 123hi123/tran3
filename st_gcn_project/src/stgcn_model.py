@@ -21,6 +21,7 @@ class GraphConvolution(nn.Module):
         x = x.view(n, self.kernel_size, kc//self.kernel_size, t, v)
         
         # Apply graph convolution
+        A = A.to(device=x.device, dtype=x.dtype)
         x = torch.einsum('nkctv,kvw->nctw', (x, A))
         
         return self.dropout(x)
@@ -77,9 +78,21 @@ class STGCNBlock(nn.Module):
         
         # Apply mask (gating mechanism)
         if mask is not None:
-            # Expand mask to match tensor dimensions
-            mask_expanded = mask.unsqueeze(1).expand_as(x)
-            x = x * mask_expanded
+            # Align mask temporal dimension to match x after temporal stride
+            # mask: [N, T, V] -> align to [N, x_T, x_V]
+            n, c, x_t, x_v = x.shape
+            mask_aligned = mask
+            # Ensure on same device/dtype
+            mask_aligned = mask_aligned.to(device=x.device, dtype=x.dtype)
+            # Resize if T or V mismatch
+            if mask_aligned.dim() == 3 and (mask_aligned.size(1) != x_t or mask_aligned.size(2) != x_v):
+                mask_aligned = F.interpolate(
+                    mask_aligned.unsqueeze(1),  # [N,1,T,V]
+                    size=(x_t, x_v),
+                    mode='nearest'
+                ).squeeze(1)  # [N, x_T, x_V]
+            # Broadcast to channel dimension
+            x = x * mask_aligned.unsqueeze(1)
         
         # Additional gating
         gate = torch.sigmoid(self.gate_conv(x))
@@ -106,8 +119,16 @@ class WeightedPooling(nn.Module):
         
         if mask is not None:
             # Apply mask to weights
-            mask_expanded = mask.unsqueeze(1).expand_as(weights)
-            weights = weights * mask_expanded
+            n, _, t, v = weights.shape
+            mask_aligned = mask
+            mask_aligned = mask_aligned.to(device=x.device, dtype=x.dtype)
+            if mask_aligned.dim() == 3 and (mask_aligned.size(1) != t or mask_aligned.size(2) != v):
+                mask_aligned = F.interpolate(
+                    mask_aligned.unsqueeze(1),  # [N,1,T,V]
+                    size=(t, v),
+                    mode='nearest'
+                ).squeeze(1)  # [N, t, v]
+            weights = weights * mask_aligned.unsqueeze(1)
             
         # Weighted average pooling
         weighted_x = x * weights
@@ -202,6 +223,8 @@ class STGCN(nn.Module):
         
         # Create mask from input
         mask = self.create_mask_from_input(x.unsqueeze(-1))
+        # Ensure mask is on same device/dtype as x for subsequent ops
+        mask = mask.to(device=x.device, dtype=x.dtype)
         
         # Apply dropout to mask during training
         mask = self.apply_joint_dropout(x, mask, self.training)

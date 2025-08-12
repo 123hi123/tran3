@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
-from torch.cuda.amp import GradScaler, autocast
+from torch import amp
 import numpy as np
 import os
 import pickle
@@ -39,7 +39,7 @@ class Trainer:
         self.val_accuracies = []
         
         # 混合精度訓練 (針對 RTX A2000 記憶體優化)
-        self.scaler = GradScaler()
+        self.scaler = amp.GradScaler('cuda') if torch.cuda.is_available() else amp.GradScaler()
         self.use_amp = True
         
         # 梯度累積設定 (等效更大批次大小)
@@ -69,7 +69,7 @@ class Trainer:
             
             # 混合精度前向傳播
             if self.use_amp:
-                with autocast():
+                with amp.autocast('cuda' if self.device.type == 'cuda' else 'cpu'):
                     output = self.model(data)
                     loss = criterion(output, target)
                     # 梯度累積正規化
@@ -139,7 +139,7 @@ class Trainer:
                 
                 # 驗證時也使用混合精度加速
                 if self.use_amp:
-                    with autocast():
+                    with amp.autocast('cuda' if self.device.type == 'cuda' else 'cpu'):
                         output = self.model(data)
                         loss = criterion(output, target)
                 else:
@@ -231,7 +231,7 @@ class Trainer:
         
         # Learning rate scheduler
         scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, mode='max', factor=0.5, patience=patience//2, verbose=True
+            optimizer, mode='max', factor=0.5, patience=patience//2
         )
         
         best_epoch = 0
