@@ -87,75 +87,50 @@ class SkeletonDataProcessor:
         
         return skeleton_data, joint_names
     
-    def _compute_feature_stats_ignore_zeros(self, data, min_valid=10):
+    def _compute_feature_stats_ignore_zeros(self, data):
         """計算每個關節坐標維度 (x,y,z) 的平均與標準差，忽略 0（視為缺失）
-        FIXED: Handle dimensions with all missing values properly
+        FIXED: Simplified to match v1 interface but with better zero handling
         參數:
             data: ndarray, 形狀 [N, V, 3]
-            min_valid: 最少有效數據點數量
         回傳:
-            means, stds, valid_stats_mask: 形狀 [V, 3]
+            means, stds: 形狀 [V, 3]
         """
         mask = (data != 0)
         valid_counts = mask.sum(axis=0)  # [V, 3]
-        
-        # 標記有效統計的維度
-        valid_stats_mask = valid_counts >= min_valid
-        
-        # 初始化統計量
-        means = np.zeros_like(valid_counts, dtype=float)
-        stds = np.ones_like(valid_counts, dtype=float)
-        
-        # 計算每個維度的統計量
-        for v in range(data.shape[1]):
-            for c in range(data.shape[2]):
-                if valid_stats_mask[v, c]:
-                    valid_data = data[:, v, c][mask[:, v, c]]
-                    means[v, c] = valid_data.mean()
-                    stds[v, c] = max(valid_data.std(), 1e-6)  # 避免標準差為 0
-        
-        return means, stds, valid_stats_mask
+        valid_counts = np.maximum(valid_counts, 1)  # 避免除以 0
+        sums = (data * mask).sum(axis=0)
+        means = sums / valid_counts
+        var = (((data - means) * mask) ** 2).sum(axis=0) / valid_counts
+        stds = np.sqrt(var)
+        stds = np.where(stds < 1e-6, 1.0, stds)  # 避免除以 0 或過小
+        return means, stds
 
     def normalize_coordinates(self, skeleton_data):
         """以忽略 0 的方式做 z-score 正規化，只對非 0 值標準化，0 值維持為 0
-        FIXED: Use improved statistics computation and correct dimension handling
-        回傳 (normalized, means, stds, valid_stats_mask)
+        FIXED: Simplified to match v1 interface, just improved statistics computation
+        回傳 (normalized, means, stds)
         """
         data = skeleton_data.copy()
-        means, stds, valid_stats_mask = self._compute_feature_stats_ignore_zeros(data)
+        means, stds = self._compute_feature_stats_ignore_zeros(data)
         
-        # 只對有效統計的維度進行正規化
         mask = (data != 0)
         data = data - means  # broadcast [N,V,3]
         data[~mask] = 0
         data = data / stds
         data[~mask] = 0
         
-        # FIXED: 對於沒有有效統計的維度，保持原值（正確處理維度）
-        # valid_stats_mask 是 [V,3]，需要 broadcast 到 [N,V,3]
-        invalid_stats = ~valid_stats_mask[np.newaxis, :, :]  # 擴展到 [1,V,3]
-        data[invalid_stats] = skeleton_data[invalid_stats]
-        
-        return data, means, stds, valid_stats_mask
+        return data, means, stds
 
-    def normalize_with_stats(self, skeleton_data, means, stds, valid_stats_mask):
+    def normalize_with_stats(self, skeleton_data, means, stds):
         """使用給定的均值/標準差進行正規化（忽略 0）
-        FIXED: Handle invalid statistics dimensions and correct broadcasting
+        FIXED: Simplified to match v1 interface
         """
         data = skeleton_data.copy()
         mask = (data != 0)
-        
-        # 只對有效統計的維度進行正規化
         data = data - means
         data[~mask] = 0
         data = data / stds
         data[~mask] = 0
-        
-        # FIXED: 對於沒有有效統計的維度，保持原值（正確處理維度）
-        # valid_stats_mask 是 [V,3]，需要 broadcast 到 [N,V,3]
-        invalid_stats = ~valid_stats_mask[np.newaxis, :, :]  # 擴展到 [1,V,3]
-        data[invalid_stats] = skeleton_data[invalid_stats]
-        
         return data
     
     def validate_input_data(self, X, y, expected_shape=None):
@@ -293,7 +268,7 @@ class SkeletonDataProcessor:
         train_skeleton, joint_names = self.reshape_to_skeleton_format(train_coords_masked, coord_columns)
         
         # Normalize（忽略 0，並回傳統計量以供驗證集使用）
-        train_skeleton_norm, feat_means, feat_stds, valid_stats_mask = self.normalize_coordinates(train_skeleton)
+        train_skeleton_norm, feat_means, feat_stds = self.normalize_coordinates(train_skeleton)
         
         # Temporal alignment
         train_aligned, train_labels_aligned = self.temporal_alignment(train_skeleton_norm, train_labels, train_video_ids)
@@ -308,7 +283,7 @@ class SkeletonDataProcessor:
         val_skeleton, _ = self.reshape_to_skeleton_format(val_coords_masked, coord_columns)
         
         # Apply same normalization（使用訓練集統計量，忽略 0）
-        val_skeleton_norm = self.normalize_with_stats(val_skeleton, feat_means, feat_stds, valid_stats_mask)
+        val_skeleton_norm = self.normalize_with_stats(val_skeleton, feat_means, feat_stds)
         
         val_aligned, val_labels_aligned = self.temporal_alignment(val_skeleton_norm, val_labels, val_video_ids)
         X_val = self.convert_to_stgcn_format(val_aligned)
@@ -345,7 +320,6 @@ class SkeletonDataProcessor:
             'scaler': self.scaler,
             'norm_means': feat_means,
             'norm_stds': feat_stds,
-            'valid_stats_mask': valid_stats_mask,  # NEW: Track which dimensions have valid stats
             'label_encoder': self.label_encoder
         }
         
