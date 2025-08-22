@@ -387,16 +387,16 @@ def main():
     if torch.cuda.is_available() and _triton_available():
         try:
             model = torch.compile(model, mode='reduce-overhead')
-            print("✅ Model compiled with torch.compile for better performance")
+            print("Model compiled with torch.compile for better performance")
         except Exception as e:
-            print(f"⚠️ torch.compile failed, using eager mode: {e}")
+            print(f"torch.compile failed, using eager mode: {e}")
             # 確保模型回到原始狀態
             model = model.to(device)
     else:
         if torch.cuda.is_available():
-            print("ℹ️ Triton not available, using eager mode")
+            print("Triton not available, using eager mode")
         else:
-            print("ℹ️ Using CPU, torch.compile skipped")
+            print("Using CPU, torch.compile skipped")
     
     # Create trainer and start training
     trainer = Trainer(model, device, save_dir="models")
