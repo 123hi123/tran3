@@ -181,10 +181,38 @@ cd st_gcn_project
 python test_setup.py
 
 # 4. 執行完整流程
-python run_pipeline.py
+python run_pipeline.py  # 使用默認 v1 版本
+# 或
+python run_pipeline.py --version=v2  # 使用修復版本 v2
 ```
 
+### 版本選擇
+
+本專案提供兩個版本的 pipeline：
+
+#### v1 (默認版本)
+```bash
+python run_pipeline.py
+```
+- 原始實作版本
+- 適用於一般使用
+
+#### v2 (修復版本) - **推薦**
+```bash
+python run_pipeline.py --version=v2
+```
+- **修復的問題**：
+  - ✅ 梯度累積邏輯錯誤（防止梯度殘留）
+  - ✅ 0值處理策略（只將 NaN 視為缺失，保留真實 0 值）
+  - ✅ 統計量計算錯誤（正確處理全部缺失的維度）
+  - ✅ 記憶體管理優化（減少頻繁的記憶體清理）
+  - ✅ 改善錯誤處理（torch.compile 失敗回退）
+  - ✅ 新增數據驗證功能
+- **推薦使用**：包含所有已知問題的修復
+
 ### 分步執行
+
+#### 使用 v1 版本
 ```bash
 # 啟動環境
 conda activate sign_language
@@ -194,6 +222,21 @@ python src/data_processor.py
 
 # 2. 模型訓練
 python src/train.py
+
+# 3. 模型評估
+python src/evaluate.py
+```
+
+#### 使用 v2 版本（推薦）
+```bash
+# 啟動環境
+conda activate sign_language
+
+# 1. 資料處理
+python src/data_processor_v2.py
+
+# 2. 模型訓練
+python src/train_v2.py
 
 # 3. 模型評估
 python src/evaluate.py
