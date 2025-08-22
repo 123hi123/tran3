@@ -7,6 +7,7 @@ This script ensures all components work together with correct paths
 import os
 import sys
 import subprocess
+import argparse
 from datetime import datetime
 
 
@@ -71,7 +72,12 @@ def check_data_files():
 
 def main():
     """Run the complete ST-GCN pipeline"""
-    print("ST-GCN Pipeline Runner")
+    parser = argparse.ArgumentParser(description='ST-GCN Pipeline Runner')
+    parser.add_argument('--version', choices=['v1', 'v2'], default='v1',
+                       help='Pipeline version to use (default: v1)')
+    args = parser.parse_args()
+    
+    print(f"ST-GCN Pipeline Runner (Version: {args.version})")
     print("=" * 60)
     
     # Change to project directory
@@ -91,13 +97,15 @@ def main():
     
     # Step 2: Data processing
     print("\n2. Processing data...")
-    if not run_command("python src/data_processor.py", "Data Processing"):
+    data_processor = "src/data_processor_v2.py" if args.version == 'v2' else "src/data_processor.py"
+    if not run_command(f"python {data_processor}", "Data Processing"):
         print("❌ Data processing failed!")
         return False
     
     # Step 3: Model training
     print("\n3. Training model...")
-    if not run_command("python src/train.py", "Model Training"):
+    trainer = "src/train_v2.py" if args.version == 'v2' else "src/train.py"
+    if not run_command(f"python {trainer}", "Model Training"):
         print("❌ Model training failed!")
         return False
     
