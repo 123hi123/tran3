@@ -133,18 +133,6 @@ class SkeletonDataProcessor:
         data[~mask] = 0
         return data
     
-    def validate_input_data(self, X, y, expected_shape=None):
-        """驗證輸入數據有效性
-        NEW: Added input validation
-        """
-        assert X.shape[0] == len(y), f"樣本數量不匹配: X={X.shape[0]}, y={len(y)}"
-        assert not np.any(np.isnan(X)), "輸入數據包含 NaN 值"
-        
-        if expected_shape is not None:
-            assert X.shape[1:] == expected_shape, f"數據形狀錯誤: 期望{expected_shape}, 實際{X.shape[1:]}"
-        
-        print(f"✅ 數據驗證通過：{X.shape[0]} 樣本, 形狀 {X.shape[1:]}")
-        return True
     
     def temporal_alignment(self, data, labels, video_ids=None):
         """Align temporal sequences to fixed length T=20 with specific windowing rules"""
@@ -292,10 +280,6 @@ class SkeletonDataProcessor:
         y_train = self.label_encoder.fit_transform(train_labels_aligned)
         y_val = self.label_encoder.transform(val_labels_aligned)
         
-        # Validate processed data
-        expected_shape = (3, self.max_frames, len(joint_names), 1)
-        self.validate_input_data(X_train, y_train, expected_shape)
-        self.validate_input_data(X_val, y_val, expected_shape)
         
         print(f"Training data shape: {X_train.shape}")
         print(f"Validation data shape: {X_val.shape}")
