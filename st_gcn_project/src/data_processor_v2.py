@@ -118,7 +118,7 @@ class SkeletonDataProcessor:
 
     def normalize_coordinates(self, skeleton_data):
         """以忽略 0 的方式做 z-score 正規化，只對非 0 值標準化，0 值維持為 0
-        FIXED: Use improved statistics computation
+        FIXED: Use improved statistics computation and correct dimension handling
         回傳 (normalized, means, stds, valid_stats_mask)
         """
         data = skeleton_data.copy()
@@ -131,14 +131,16 @@ class SkeletonDataProcessor:
         data = data / stds
         data[~mask] = 0
         
-        # 對於沒有有效統計的維度，保持原值
-        data[~valid_stats_mask] = skeleton_data[~valid_stats_mask]
+        # FIXED: 對於沒有有效統計的維度，保持原值（正確處理維度）
+        # valid_stats_mask 是 [V,3]，需要 broadcast 到 [N,V,3]
+        invalid_stats = ~valid_stats_mask[np.newaxis, :, :]  # 擴展到 [1,V,3]
+        data[invalid_stats] = skeleton_data[invalid_stats]
         
         return data, means, stds, valid_stats_mask
 
     def normalize_with_stats(self, skeleton_data, means, stds, valid_stats_mask):
         """使用給定的均值/標準差進行正規化（忽略 0）
-        FIXED: Handle invalid statistics dimensions
+        FIXED: Handle invalid statistics dimensions and correct broadcasting
         """
         data = skeleton_data.copy()
         mask = (data != 0)
@@ -149,8 +151,10 @@ class SkeletonDataProcessor:
         data = data / stds
         data[~mask] = 0
         
-        # 對於沒有有效統計的維度，保持原值
-        data[~valid_stats_mask] = skeleton_data[~valid_stats_mask]
+        # FIXED: 對於沒有有效統計的維度，保持原值（正確處理維度）
+        # valid_stats_mask 是 [V,3]，需要 broadcast 到 [N,V,3]
+        invalid_stats = ~valid_stats_mask[np.newaxis, :, :]  # 擴展到 [1,V,3]
+        data[invalid_stats] = skeleton_data[invalid_stats]
         
         return data
     
