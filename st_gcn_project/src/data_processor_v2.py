@@ -43,10 +43,9 @@ class SkeletonDataProcessor:
         return coordinate_data, labels, coord_columns, video_ids
     
     def create_mask_from_nan(self, data):
-        """Create binary mask from NaN values: 1 for valid data, 0 for NaN
-        FIXED: Only treat NaN as missing, keep real 0 values
-        """
-        mask = ~np.isnan(data)
+        """Create binary mask from NaN values: 1 for valid data, 0 for NaN"""
+        # 同時將數值為 0 視為缺失，避免將 0 當作有效數據參與之後的正規化
+        mask = (~np.isnan(data)) & (data != 0)
         return mask.astype(np.float32)
     
     def apply_mask_to_coordinates(self, data, mask):
